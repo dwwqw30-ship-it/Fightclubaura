@@ -1,85 +1,61 @@
 
--- PURPLE HUB V2 | MOBILE GUI
--- For your own Roblox experience
+-- PURPLE HUB V3
+-- Roblox Studio | LocalScript
+-- Place in StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
-local purple = Color3.fromRGB(170, 80, 255)
-local dark = Color3.fromRGB(25, 13, 40)
+local purple = Color3.fromRGB(174, 91, 255)
+local dark = Color3.fromRGB(25, 14, 39)
+local panel = Color3.fromRGB(48, 27, 69)
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "PurpleHub"
+gui.Name = "PurpleHubV3"
 gui.ResetOnSpawn = false
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(270, 390)
-main.Position = UDim2.new(0.5, -135, 0.5, -195)
+main.Size = UDim2.fromOffset(285, 355)
+main.Position = UDim2.new(0.5, -142, 0.5, -177)
 main.BackgroundColor3 = dark
 main.Parent = gui
 
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 18)
 
-local stroke = Instance.new("UIStroke", main)
-stroke.Color = purple
-stroke.Thickness = 2
+local outline = Instance.new("UIStroke", main)
+outline.Color = purple
+outline.Thickness = 2
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 48)
 title.BackgroundTransparency = 1
-title.Text = "💜 PURPLE HUB V2"
+title.Text = "PURPLE HUB V3"
 title.TextColor3 = Color3.new(1,1,1)
-title.TextSize = 21
 title.Font = Enum.Font.GothamBold
+title.TextSize = 22
 title.Parent = main
 
--- Mobile dragging
-local dragging, dragStart, startPos
+local content = Instance.new("Frame")
+content.Position = UDim2.fromOffset(10, 95)
+content.Size = UDim2.new(1, -20, 1, -105)
+content.BackgroundTransparency = 1
+content.Parent = main
 
-title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch
-    or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = main.Position
-    end
-end)
+local layout = Instance.new("UIListLayout", content)
+layout.Padding = UDim.new(0, 8)
 
-UIS.InputChanged:Connect(function(input)
-    if dragging and (
-        input.UserInputType == Enum.UserInputType.Touch
-        or input.UserInputType == Enum.UserInputType.MouseMovement
-    ) then
-        local delta = input.Position - dragStart
-        main.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-UIS.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch
-    or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
--- Toggle button helper
-local function makeButton(name, y, callback)
+local function button(name, callback)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(0.88, 0, 0, 39)
-    b.Position = UDim2.new(0.06, 0, 0, y)
-    b.BackgroundColor3 = Color3.fromRGB(65, 35, 95)
+    b.Size = UDim2.new(1, 0, 0, 39)
+    b.BackgroundColor3 = panel
     b.TextColor3 = Color3.new(1,1,1)
-    b.Text = name .. " : OFF"
+    b.Text = name .. "  OFF"
     b.Font = Enum.Font.GothamBold
-    b.TextSize = 14
-    b.Parent = main
+    b.TextSize = 13
+    b.Parent = content
 
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 9)
 
@@ -87,48 +63,44 @@ local function makeButton(name, y, callback)
 
     b.Activated:Connect(function()
         enabled = not enabled
-        b.Text = name .. (enabled and " : ON" or " : OFF")
-        b.BackgroundColor3 = enabled and purple
-            or Color3.fromRGB(65,35,95)
+        b.Text = name .. (enabled and "  ON" or "  OFF")
+
+        TweenService:Create(b, TweenInfo.new(0.15), {
+            BackgroundColor3 = enabled and purple or panel
+        }):Play()
+
         callback(enabled)
     end)
-
-    return b
 end
 
-local highlights = {}
-local headEffects = {}
-local bigHead = false
+local esp = false
+local big = false
 local transparent = false
 local visualizer = false
 
-local function clearPlayer(p)
+local highlights = {}
+local boxes = {}
+
+local function update(p)
+    if p == player then return end
+
     if highlights[p] then
         highlights[p]:Destroy()
         highlights[p] = nil
     end
 
-    if headEffects[p] then
-        headEffects[p]:Destroy()
-        headEffects[p] = nil
+    if boxes[p] then
+        boxes[p]:Destroy()
+        boxes[p] = nil
     end
-end
-
-local function updatePlayer(p)
-    if p == player then return end
 
     local char = p.Character
     if not char then return end
 
-    if highlights[p] then
-        highlights[p]:Destroy()
-        highlights[p] = nil
-    end
-
     local head = char:FindFirstChild("Head")
     if not head then return end
 
-    if espEnabled then
+    if esp then
         local h = Instance.new("Highlight")
         h.FillColor = purple
         h.OutlineColor = Color3.new(1,1,1)
@@ -137,88 +109,101 @@ local function updatePlayer(p)
         highlights[p] = h
     end
 
-    if headEffects[p] then
-        headEffects[p]:Destroy()
-    end
-
     if visualizer then
         local box = Instance.new("BoxHandleAdornment")
         box.Adornee = head
         box.Size = head.Size
         box.Color3 = purple
-        box.Transparency = 0.65
+        box.Transparency = 0.6
         box.AlwaysOnTop = true
-        box.ZIndex = 5
         box.Parent = head
-        headEffects[p] = box
+        boxes[p] = box
     end
 end
 
-espEnabled = false
-
-makeButton("PLAYER ESP", 60, function(on)
-    espEnabled = on
+local function refresh()
     for _, p in ipairs(Players:GetPlayers()) do
-        updatePlayer(p)
+        update(p)
     end
+end
+
+button("PLAYER ESP", function(v)
+    esp = v
+    refresh()
 end)
 
-makeButton("BIG HEAD VISUAL", 108, function(on)
-    bigHead = on
+button("BIG HEAD VISUAL", function(v)
+    big = v
     for _, p in ipairs(Players:GetPlayers()) do
         local head = p.Character and p.Character:FindFirstChild("Head")
         if head and p ~= player then
-            head.Size = on and Vector3.new(2.5,2.5,2.5)
-                or Vector3.new(1,1,1)
+            if v then
+                head.Size = Vector3.new(2,2,2)
+            else
+                head.Size = Vector3.new(1,1,1)
+            end
         end
     end
 end)
 
-makeButton("TRANSPARENT HEAD", 156, function(on)
-    transparent = on
+button("TRANSPARENT HEAD", function(v)
+    transparent = v
     for _, p in ipairs(Players:GetPlayers()) do
         local head = p.Character and p.Character:FindFirstChild("Head")
         if head and p ~= player then
-            head.LocalTransparencyModifier = on and 0.65 or 0
+            head.LocalTransparencyModifier = v and 0.6 or 0
         end
     end
 end)
 
-makeButton("HITBOX VISUALIZER", 204, function(on)
-    visualizer = on
-    for _, p in ipairs(Players:GetPlayers()) do
-        updatePlayer(p)
-    end
+button("HITBOX VISUALIZER", function(v)
+    visualizer = v
+    refresh()
 end)
 
--- Reapply visual effects after respawn
-local function watchPlayer(p)
+local combat = Instance.new("TextLabel")
+combat.Size = UDim2.new(1, 0, 0, 30)
+combat.BackgroundTransparency = 1
+combat.Text = "COMBAT SETTINGS"
+combat.TextColor3 = purple
+combat.Font = Enum.Font.GothamBold
+combat.TextSize = 15
+combat.Parent = content
+
+local info = Instance.new("TextLabel")
+info.Size = UDim2.new(1, 0, 0, 65)
+info.BackgroundColor3 = panel
+info.TextColor3 = Color3.new(1,1,1)
+info.TextWrapped = true
+info.TextSize = 12
+info.Font = Enum.Font.Gotham
+info.Text = "Combat system requires server-side implementation in your own Roblox game."
+info.Parent = content
+
+Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function()
         task.wait(1)
-        updatePlayer(p)
+        update(p)
     end)
-end
+end)
 
-Players.PlayerAdded:Connect(watchPlayer)
+-- Round open/close button
+local open = Instance.new("TextButton")
+open.Size = UDim2.fromOffset(58, 58)
+open.Position = UDim2.new(0, 15, 0.5, 0)
+open.BackgroundColor3 = purple
+open.Text = "💜"
+open.TextSize = 25
+open.Parent = gui
 
-for _, p in ipairs(Players:GetPlayers()) do
-    watchPlayer(p)
-end
+Instance.new("UICorner", open).CornerRadius = UDim.new(1, 0)
 
--- Hide / show menu
-local hide = Instance.new("TextButton")
-hide.Size = UDim2.fromOffset(90, 38)
-hide.Position = UDim2.new(0, 10, 0.5, 0)
-hide.BackgroundColor3 = purple
-hide.Text = "PURPLE"
-hide.TextColor3 = Color3.new(1,1,1)
-hide.Font = Enum.Font.GothamBold
-hide.Parent = gui
+local openStroke = Instance.new("UIStroke", open)
+openStroke.Color = Color3.new(1,1,1)
+openStroke.Thickness = 2
 
-Instance.new("UICorner", hide).CornerRadius = UDim.new(0,10)
-
-hide.Activated:Connect(function()
+open.Activated:Connect(function()
     main.Visible = not main.Visible
 end)
 
-print("PURPLE HUB V2 LOADED")
+print("PURPLE HUB V3 LOADED")
