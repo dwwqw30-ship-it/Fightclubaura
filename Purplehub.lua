@@ -1,273 +1,304 @@
-
--- PURPLE HUB V4
--- Roblox Studio | LocalScript
--- Place in StarterPlayerScripts
-
+-- ============================================================
+-- Fight Club helper script (v2)
+-- Меню + перетаскивание + круглая кнопка скрытия
+-- ============================================================
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
 
-local player = Players.LocalPlayer
-local purple = Color3.fromRGB(174, 91, 255)
-local dark = Color3.fromRGB(25, 14, 39)
-local panel = Color3.fromRGB(48, 27, 69)
+-- ===== НАСТРОЙКИ =====
+local config = {
+    killAura = false,
+    esp = false,
+    bigHeads = false,
+    hitboxes = false,
+    punchSpeed = false,
+    punchDamage = false,
+}
 
+-- ============================================================
+-- ESP
+-- ============================================================
+local espObjects = {}
+local function createESP(plr)
+    if plr == LocalPlayer then return end
+    local char = plr.Character
+    if not char then return end
+    if espObjects[plr] then return end
+    local hl = Instance.new("Highlight")
+    hl.Name = "ESP_Highlight"
+    hl.FillColor = Color3.fromRGB(255, 0, 0)
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.FillTransparency = 0.5
+    hl.Parent = char
+    espObjects[plr] = hl
+end
+
+local function removeESP(plr)
+    if espObjects[plr] then
+        espObjects[plr]:Destroy()
+        espObjects[plr] = nil
+    end
+end
+
+local function refreshESP()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if config.esp then createESP(p) else removeESP(p) end
+    end
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if config.esp then
+        p.CharacterAdded:Connect(function() task.wait(0.5) createESP(p) end)
+    end
+end)
+Players.PlayerRemoving:Connect(removeESP)
+
+-- ============================================================
+-- БОЛЬШИЕ ГОЛОВЫ / ХИТБОКСЫ
+-- ============================================================
+local function setBigHeads(state)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local head = plr.Character:FindFirstChild("Head")
+            if head then
+                if state then
+                    head.Size = Vector3.new(3, 3, 3)
+                    head.Transparency = 0.3
+                    head.CanCollide = false
+                else
+                    head.Size = Vector3.new(2, 1, 1)
+                    head.Transparency = 0
+                    head.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- KILL AURA
+-- ============================================================
+local function getClosestPlayer(maxDist)
+    local closest, dist = nil, maxDist or 20
+    local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d = (hrp.Position - myHrp.Position).Magnitude
+                if d < dist then
+                    closest, dist = plr, d
+                end
+            end
+        end
+    end
+    return closest
+end
+
+RunService.Heartbeat:Connect(function()
+    if config.killAura then
+        local target = getClosestPlayer(15)
+        if target and target.Character then
+            local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:TakeDamage(10)
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- PUNCH SPEED / DAMAGE (заглушки — под свою игру)
+-- ============================================================
+local function setPunchSpeed(state)
+    local rs = game:GetService("ReplicatedStorage")
+    for _, obj in ipairs(rs:GetDescendants()) do
+        if obj:IsA("NumberValue") and obj.Name:lower():find("punch") then
+            obj.Value = state and 0.1 or 0.5
+        end
+    end
+end
+
+local function setPunchDamage(state)
+    local rs = game:GetService("ReplicatedStorage")
+    for _, obj in ipairs(rs:GetDescendants()) do
+        if obj:IsA("NumberValue") and obj.Name:lower():find("damage") then
+            obj.Value = state and 999 or 10
+        end
+    end
+end
+
+-- ============================================================
+-- МЕНЮ
+-- ============================================================
 local gui = Instance.new("ScreenGui")
-gui.Name = "PurpleHubV4"
+gui.Name = "FC_Menu"
 gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
+gui.IgnoreGuiInset = true
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- MAIN WINDOW
-local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(285, 355)
-main.Position = UDim2.new(0.5, -142, 0.5, -177)
-main.BackgroundColor3 = dark
-main.Parent = gui
+-- --- Основное меню ---
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 320)
+frame.Position = UDim2.new(0, 20, 0, 80)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Visible = true
+frame.Parent = gui
 
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 18)
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = frame
 
-local outline = Instance.new("UIStroke", main)
-outline.Color = purple
-outline.Thickness = 2
+-- --- Круглая кнопка скрытия (переключатель) ---
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0, 20, 0, 20)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleBtn.Text = "👁"
+toggleBtn.TextSize = 26
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.BorderSizePixel = 0
+toggleBtn.AutoButtonColor = false
+toggleBtn.Active = true
+toggleBtn.Parent = gui
 
--- TITLE
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 52)
-title.BackgroundColor3 = panel
-title.BackgroundTransparency = 0.2
-title.Text = "PURPLE HUB V4"
-title.TextColor3 = Color3.new(1, 1, 1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 21
-title.Active = true
-title.Parent = main
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(1, 0)
+toggleCorner.Parent = toggleBtn
 
-Instance.new("UICorner", title).CornerRadius = UDim.new(0, 16)
-
--- MOBILE DRAG
+-- --- Перетаскивание меню (мышь + тач) ---
 local dragging = false
-local dragInput
-local dragStart
-local startPosition
+local dragInput, dragStart, startPos
 
-title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch
-    or input.UserInputType == Enum.UserInputType.MouseButton1 then
-
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
-        startPosition = main.Position
-
-        if input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-
+        startPos = frame.Position
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
-                dragInput = nil
             end
         end)
     end
 end)
 
-UIS.InputChanged:Connect(function(input)
-    if not dragging then return end
-
+frame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement
-    or (input.UserInputType == Enum.UserInputType.Touch
-    and input == dragInput) then
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
 
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input == dragInput) then
         local delta = input.Position - dragStart
-
-        main.Position = UDim2.new(
-            startPosition.X.Scale,
-            startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale,
-            startPosition.Y.Offset + delta.Y
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
         )
     end
 end)
 
--- SCROLLING CONTENT
-local content = Instance.new("ScrollingFrame")
-content.Position = UDim2.fromOffset(10, 62)
-content.Size = UDim2.new(1, -20, 1, -72)
-content.BackgroundTransparency = 1
-content.BorderSizePixel = 0
-content.ScrollBarThickness = 5
-content.ScrollBarImageColor3 = purple
-content.ScrollingDirection = Enum.ScrollingDirection.Y
-content.AutomaticCanvasSize = Enum.AutomaticSize.Y
-content.CanvasSize = UDim2.new(0, 0, 0, 0)
-content.Active = true
-content.Parent = main
+-- --- Перетаскивание круглой кнопки ---
+local btnDragging, btnDragInput, btnStartPos, btnDragStart
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        btnDragging = true
+        btnDragStart = input.Position
+        btnStartPos = toggleBtn.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                btnDragging = false
+            end
+        end)
+    end
+end)
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 8)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = content
+toggleBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch then
+        btnDragInput = input
+    end
+end)
 
-local padding = Instance.new("UIPadding")
-padding.PaddingBottom = UDim.new(0, 10)
-padding.Parent = content
+UserInputService.InputChanged:Connect(function(input)
+    if btnDragging and (input == btnDragInput) then
+        local delta = input.Position - btnDragStart
+        -- защита от «уезжания» кнопки, если началось перетаскивание
+        toggleBtn.Position = UDim2.new(
+            btnStartPos.X.Scale, btnStartPos.X.Offset + delta.X,
+            btnStartPos.Y.Scale, btnStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
 
--- BUTTON FUNCTION
-local function button(name, callback)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1, -5, 0, 39)
-    b.BackgroundColor3 = panel
-    b.TextColor3 = Color3.new(1, 1, 1)
-    b.Text = name .. "  OFF"
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 13
-    b.Parent = content
+-- --- Переключение видимости меню ---
+toggleBtn.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+end)
 
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 9)
-
-    local enabled = false
-
-    b.Activated:Connect(function()
-        enabled = not enabled
-        b.Text = name .. (enabled and "  ON" or "  OFF")
-
-        TweenService:Create(b, TweenInfo.new(0.15), {
-            BackgroundColor3 = enabled and purple or panel
-        }):Play()
-
-        callback(enabled)
-    end)
+-- --- Функция добавления кнопки ---
+local function addButton(text, y, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 34)
+    btn.Position = UDim2.new(0, 5, 0, y)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = text
+    btn.TextSize = 15
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = true
+    btn.Parent = frame
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = btn
+    btn.MouseButton1Click:Connect(callback)
+    return btn
 end
 
--- PLAYER VISUALS
-local esp = false
-local visualizer = false
+-- --- Кнопки меню ---
+local y = 5
 
-local highlights = {}
-local boxes = {}
+local auraBtn = addButton("Kill Aura: OFF", y, function()
+    config.killAura = not config.killAura
+    auraBtn.Text = "Kill Aura: " .. (config.killAura and "ON" or "OFF")
+end); y = y + 40
 
-local function update(p)
-    if p == player then return end
+local espBtn = addButton("ESP: OFF", y, function()
+    config.esp = not config.esp
+    espBtn.Text = "ESP: " .. (config.esp and "ON" or "OFF")
+    refreshESP()
+end); y = y + 40
 
-    if highlights[p] then
-        highlights[p]:Destroy()
-        highlights[p] = nil
-    end
+local headBtn = addButton("Big Heads: OFF", y, function()
+    config.bigHeads = not config.bigHeads
+    headBtn.Text = "Big Heads: " .. (config.bigHeads and "ON" or "OFF")
+    setBigHeads(config.bigHeads)
+end); y = y + 40
 
-    if boxes[p] then
-        boxes[p]:Destroy()
-        boxes[p] = nil
-    end
+local hitboxBtn = addButton("Hitboxes: OFF", y, function()
+    config.hitboxes = not config.hitboxes
+    hitboxBtn.Text = "Hitboxes: " .. (config.hitboxes and "ON" or "OFF")
+    -- хитбоксы = большие прозрачные головы (можно расширить на торс/руки)
+    setBigHeads(config.hitboxes)
+end); y = y + 40
 
-    local char = p.Character
-    if not char then return end
+local speedBtn = addButton("Punch Speed: OFF", y, function()
+    config.punchSpeed = not config.punchSpeed
+    speedBtn.Text = "Punch Speed: " .. (config.punchSpeed and "ON" or "OFF")
+    setPunchSpeed(config.punchSpeed)
+end); y = y + 40
 
-    local head = char:FindFirstChild("Head")
-    if not head then return end
-
-    if esp then
-        local h = Instance.new("Highlight")
-        h.FillColor = purple
-        h.OutlineColor = Color3.new(1, 1, 1)
-        h.FillTransparency = 0.65
-        h.Parent = char
-        highlights[p] = h
-    end
-
-    if visualizer then
-        local box = Instance.new("BoxHandleAdornment")
-        box.Adornee = head
-        box.Size = head.Size
-        box.Color3 = purple
-        box.Transparency = 0.6
-        box.AlwaysOnTop = true
-        box.Parent = head
-        boxes[p] = box
-    end
-end
-
-local function refresh()
-    for _, p in ipairs(Players:GetPlayers()) do
-        update(p)
-    end
-end
-
-button("PLAYER ESP", function(v)
-    esp = v
-    refresh()
+local dmgBtn = addButton("Punch Damage: OFF", y, function()
+    config.punchDamage = not config.punchDamage
+    dmgBtn.Text = "Punch Damage: " .. (config.punchDamage and "ON" or "OFF")
+    setPunchDamage(config.punchDamage)
 end)
-
-button("BIG HEAD VISUAL", function(v)
-    for _, p in ipairs(Players:GetPlayers()) do
-        local head = p.Character and p.Character:FindFirstChild("Head")
-        if head and p ~= player then
-            head.Size = v and Vector3.new(2, 2, 2)
-                or Vector3.new(1, 1, 1)
-        end
-    end
-end)
-
-button("TRANSPARENT HEAD", function(v)
-    for _, p in ipairs(Players:GetPlayers()) do
-        local head = p.Character and p.Character:FindFirstChild("Head")
-        if head and p ~= player then
-            head.LocalTransparencyModifier = v and 0.6 or 0
-        end
-    end
-end)
-
-button("HITBOX VISUALIZER", function(v)
-    visualizer = v
-    refresh()
-end)
-
--- COMBAT INFO
-local combat = Instance.new("TextLabel")
-combat.Size = UDim2.new(1, -5, 0, 30)
-combat.BackgroundTransparency = 1
-combat.Text = "COMBAT SETTINGS"
-combat.TextColor3 = purple
-combat.Font = Enum.Font.GothamBold
-combat.TextSize = 15
-combat.Parent = content
-
-local info = Instance.new("TextLabel")
-info.Size = UDim2.new(1, -5, 0, 65)
-info.BackgroundColor3 = panel
-info.TextColor3 = Color3.new(1, 1, 1)
-info.TextWrapped = true
-info.TextSize = 12
-info.Font = Enum.Font.Gotham
-info.Text = "Combat system requires server-side implementation in your own Roblox game."
-info.Parent = content
-
-Instance.new("UICorner", info).CornerRadius = UDim.new(0, 9)
-
--- PLAYER JOIN
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function()
-        task.wait(1)
-        update(p)
-    end)
-end)
-
--- OPEN / CLOSE BUTTON
-local open = Instance.new("TextButton")
-open.Size = UDim2.fromOffset(58, 58)
-open.Position = UDim2.new(0, 15, 0.5, 0)
-open.BackgroundColor3 = purple
-open.Text = "💜"
-open.TextSize = 25
-open.Parent = gui
-
-Instance.new("UICorner", open).CornerRadius = UDim.new(1, 0)
-
-local openStroke = Instance.new("UIStroke", open)
-openStroke.Color = Color3.new(1, 1, 1)
-openStroke.Thickness = 2
-
-open.Activated:Connect(function()
-    main.Visible = not main.Visible
-end)
-
-print("PURPLE HUB V4 LOADED")
